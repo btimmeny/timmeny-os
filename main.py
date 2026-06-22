@@ -13,6 +13,9 @@ MONDAY_API_URL = "https://api.monday.com/v2"
 ACTION_GROUP_COLUMN_TITLE = "Action Group"
 ACTION_DATE_COLUMN_TITLE = "Action Date"
 ACTION_COLUMN_TITLE = "Action"
+STATUS_COLUMN_TITLE = "Status"
+DECISION_ACTION = "Decision"
+DEFAULT_DECISION_STATUS = "Not Yet Started"
 
 app = FastAPI(title="Timmeny-ToDo-OS", version="0.1.0")
 
@@ -474,6 +477,7 @@ async def build_action_column_values(
         ACTION_GROUP_COLUMN_TITLE: action_group,
         ACTION_DATE_COLUMN_TITLE: action_date,
         ACTION_COLUMN_TITLE: action,
+        STATUS_COLUMN_TITLE: DEFAULT_DECISION_STATUS if is_decision_action(action) else None,
     }
     if all(value is None for value in requested_columns.values()):
         return {}
@@ -491,15 +495,26 @@ async def build_action_column_values(
 
     if action is not None:
         column = require_board_column(columns_by_title, ACTION_COLUMN_TITLE)
-        column_values[column["id"]] = build_action_column_value(column, action)
+        column_values[column["id"]] = build_label_column_value(column, action)
+
+    if is_decision_action(action):
+        column = require_board_column(columns_by_title, STATUS_COLUMN_TITLE)
+        column_values[column["id"]] = build_label_column_value(
+            column,
+            DEFAULT_DECISION_STATUS,
+        )
 
     return column_values
 
 
-def build_action_column_value(column: dict[str, Any], action: str) -> dict[str, Any]:
+def is_decision_action(action: str | None) -> bool:
+    return action is not None and action.strip().casefold() == DECISION_ACTION.casefold()
+
+
+def build_label_column_value(column: dict[str, Any], label: str) -> dict[str, Any]:
     if column.get("type") == "status":
-        return {"label": action}
-    return {"labels": [action]}
+        return {"label": label}
+    return {"labels": [label]}
 
 
 async def get_board_columns_by_title(

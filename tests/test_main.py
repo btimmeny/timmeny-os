@@ -333,6 +333,11 @@ def test_create_todo_can_set_action_metadata(monkeypatch):
                                             "title": "Action",
                                             "type": "dropdown",
                                         },
+                                        {
+                                            "id": "status_mkp",
+                                            "title": "Status",
+                                            "type": "status",
+                                        },
                                     ]
                                 }
                             ]
@@ -377,6 +382,7 @@ def test_create_todo_can_set_action_metadata(monkeypatch):
         "text_mkp": "Launch",
         "date_mkp": {"date": "2026-06-21"},
         "dropdown_mkp": {"labels": ["Decision"]},
+        "status_mkp": {"label": "Not Yet Started"},
     }
 
 
@@ -418,6 +424,11 @@ def test_update_todo_action_metadata(monkeypatch):
                                             "id": "dropdown_mkp",
                                             "title": "Action",
                                             "type": "dropdown",
+                                        },
+                                        {
+                                            "id": "status_mkp",
+                                            "title": "Status",
+                                            "type": "status",
                                         },
                                     ]
                                 }
@@ -462,6 +473,7 @@ def test_update_todo_action_metadata(monkeypatch):
         "text_mkp": "Partnerships",
         "date_mkp": {"date": "2026-06-21"},
         "dropdown_mkp": {"labels": ["Decision"]},
+        "status_mkp": {"label": "Not Yet Started"},
     }
 
 
@@ -494,6 +506,11 @@ def test_update_todo_action_metadata_supports_status_action_column(monkeypatch):
                                             "title": "Action",
                                             "type": "status",
                                         },
+                                        {
+                                            "id": "todo_status_mkp",
+                                            "title": "Status",
+                                            "type": "status",
+                                        },
                                     ]
                                 }
                             ]
@@ -520,6 +537,70 @@ def test_update_todo_action_metadata_supports_status_action_column(monkeypatch):
     assert response.status_code == 200
     assert json.loads(requests[1]["variables"]["column_values"]) == {
         "status_mkp": {"label": "Decision"},
+        "todo_status_mkp": {"label": "Not Yet Started"},
+    }
+
+
+def test_update_todo_action_metadata_only_sets_status_for_decisions(monkeypatch):
+    requests = []
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, json, headers):
+            requests.append(json)
+            request = httpx.Request("POST", url)
+            if "GetBoardColumns" in json["query"]:
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "boards": [
+                                {
+                                    "columns": [
+                                        {
+                                            "id": "action_mkp",
+                                            "title": "Action",
+                                            "type": "status",
+                                        },
+                                        {
+                                            "id": "status_mkp",
+                                            "title": "Status",
+                                            "type": "status",
+                                        },
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    request=request,
+                )
+            return httpx.Response(
+                200,
+                json={"data": {"change_multiple_column_values": {"id": "existing-1"}}},
+                request=request,
+            )
+
+    monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")
+    monkeypatch.delenv("TIMMENY_OS_API_KEY", raising=False)
+    monkeypatch.setenv("TODO_BOARD_ID", "todo-board")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = client.patch(
+        "/todos/existing-1/action-metadata",
+        json={"list": "todo", "action": "Follow Up"},
+    )
+
+    assert response.status_code == 200
+    assert json.loads(requests[1]["variables"]["column_values"]) == {
+        "action_mkp": {"label": "Follow Up"},
     }
 
 

@@ -102,6 +102,7 @@ Request:
 ```
 
 At least one of `action_group`, `action_date`, or `action` is required. The board must have columns named exactly `Action Group`, `Action Date`, and `Action` when those values are used.
+When `action` is `Decision`, the service also writes `Not Yet Started` to the `Status` column.
 
 ## Configuration
 
@@ -119,6 +120,7 @@ The organize workflow also expects these Monday.com columns on each board:
 - `Action Group`: text column for GPT-selected themes.
 - `Action Date`: date column for decision/action timing.
 - `Action`: dropdown or status column for labels such as `Decision`.
+- `Status`: status column. Decision items are set to `Not Yet Started`.
 
 Use `.env.example` as the local template.
 
