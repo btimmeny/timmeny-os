@@ -57,11 +57,21 @@ Query parameters:
 
 - `list`: `all`, `todo`, or `gs`. Defaults to `all`.
 - `limit`: maximum items to read from each selected board. Defaults to `25`, max `100`.
+- `include_done`: include items whose `Status` is `Done`, `Complete`, or `Completed`. Defaults to `false`.
+
+By default, completed items are excluded so grouping workflows only consider open work.
 
 Example:
 
 ```bash
 curl https://timmeny-os-production.up.railway.app/todos?list=all \
+  -H "Authorization: Bearer $TIMMENY_OS_API_KEY"
+```
+
+Include completed items only when needed:
+
+```bash
+curl "https://timmeny-os-production.up.railway.app/todos?list=all&include_done=true" \
   -H "Authorization: Bearer $TIMMENY_OS_API_KEY"
 ```
 

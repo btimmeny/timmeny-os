@@ -1053,6 +1053,143 @@ def test_list_todos_can_filter_to_gs(monkeypatch):
     }
 
 
+def test_list_todos_excludes_done_items_by_default(monkeypatch):
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, json, headers):
+            request = httpx.Request("POST", url)
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "boards": [
+                            {
+                                "columns": [
+                                    {"id": "status_mkp", "title": "Status"},
+                                ],
+                                "items_page": {
+                                    "items": [
+                                        {
+                                            "id": "1",
+                                            "name": "open item",
+                                            "group": None,
+                                            "column_values": [
+                                                {
+                                                    "id": "status_mkp",
+                                                    "text": "Not Yet Started",
+                                                    "value": None,
+                                                }
+                                            ],
+                                        },
+                                        {
+                                            "id": "2",
+                                            "name": "done item",
+                                            "group": None,
+                                            "column_values": [
+                                                {
+                                                    "id": "status_mkp",
+                                                    "text": "Done",
+                                                    "value": None,
+                                                }
+                                            ],
+                                        },
+                                    ],
+                                },
+                            }
+                        ]
+                    }
+                },
+                request=request,
+            )
+
+    monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")
+    monkeypatch.delenv("TIMMENY_OS_API_KEY", raising=False)
+    monkeypatch.setenv("TODO_BOARD_ID", "todo-board")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = client.get("/todos?list=todo")
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    assert response.json()["items"][0]["item_id"] == "1"
+
+
+def test_list_todos_can_include_done_items(monkeypatch):
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, json, headers):
+            request = httpx.Request("POST", url)
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "boards": [
+                            {
+                                "columns": [
+                                    {"id": "status_mkp", "title": "Status"},
+                                ],
+                                "items_page": {
+                                    "items": [
+                                        {
+                                            "id": "1",
+                                            "name": "open item",
+                                            "group": None,
+                                            "column_values": [
+                                                {
+                                                    "id": "status_mkp",
+                                                    "text": "Not Yet Started",
+                                                    "value": None,
+                                                }
+                                            ],
+                                        },
+                                        {
+                                            "id": "2",
+                                            "name": "done item",
+                                            "group": None,
+                                            "column_values": [
+                                                {
+                                                    "id": "status_mkp",
+                                                    "text": "Done",
+                                                    "value": None,
+                                                }
+                                            ],
+                                        },
+                                    ],
+                                },
+                            }
+                        ]
+                    }
+                },
+                request=request,
+            )
+
+    monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")
+    monkeypatch.delenv("TIMMENY_OS_API_KEY", raising=False)
+    monkeypatch.setenv("TODO_BOARD_ID", "todo-board")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = client.get("/todos?list=todo&include_done=true")
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 2
+
+
 def test_list_todos_requires_api_key_when_configured(monkeypatch):
     monkeypatch.setenv("TIMMENY_OS_API_KEY", "app-key")
     monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")

@@ -16,6 +16,7 @@ ACTION_COLUMN_TITLE = "Action"
 STATUS_COLUMN_TITLE = "Status"
 DECISION_ACTION = "Decision"
 DEFAULT_DECISION_STATUS = "Not Yet Started"
+DONE_STATUS_LABELS = {"done", "complete", "completed"}
 
 app = FastAPI(title="Timmeny-ToDo-OS", version="0.1.0")
 
@@ -132,6 +133,7 @@ async def health() -> HealthResponse:
 async def list_todos(
     list_filter: TodoListFilter = Query(default=TodoListFilter.ALL, alias="list"),
     limit: int = Query(default=25, ge=1, le=100),
+    include_done: bool = Query(default=False),
     x_api_key: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
 ) -> TodoListResponse:
@@ -148,6 +150,10 @@ async def list_todos(
             board_id=target["board_id"],
             limit=limit,
         )
+        if not include_done:
+            monday_items = [
+                item for item in monday_items if not is_done_monday_item(item)
+            ]
         items.extend(
             TodoItem(
                 item_id=item["id"],
@@ -398,6 +404,33 @@ def get_monday_action_metadata(item: dict[str, Any]) -> dict[str, str | None]:
             metadata["action"] = text
 
     return metadata
+
+
+def is_done_monday_item(item: dict[str, Any]) -> bool:
+    status = get_monday_column_text(item, STATUS_COLUMN_TITLE)
+    if status is None:
+        return False
+    return status.strip().casefold() in DONE_STATUS_LABELS
+
+
+def get_monday_column_text(item: dict[str, Any], column_title: str) -> str | None:
+    column_values = item.get("column_values")
+    if not isinstance(column_values, list):
+        return None
+
+    for column_value in column_values:
+        if not isinstance(column_value, dict):
+            continue
+        column = column_value.get("column")
+        if not isinstance(column, dict):
+            continue
+        if column.get("title") != column_title:
+            continue
+        text = column_value.get("text")
+        if isinstance(text, str):
+            return text
+
+    return None
 
 
 def get_todo_target(todo_list: TodoList) -> dict[str, str | None]:

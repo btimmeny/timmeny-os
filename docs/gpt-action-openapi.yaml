@@ -10,7 +10,7 @@ paths:
     get:
       operationId: listTodos
       summary: List todo items
-      description: Lists todo items from the regular To Do List board, the GS Initiatives & Action Items board, or both, including Action Group, Action Date, and Action metadata when present.
+      description: Lists open todo items from the regular To Do List board, the GS Initiatives & Action Items board, or both, including Action Group, Action Date, and Action metadata when present. Items with Status values Done, Complete, or Completed are excluded unless include_done is true.
       security:
         - ApiKeyAuth: []
       parameters:
@@ -34,6 +34,13 @@ paths:
             maximum: 100
             default: 25
           description: Maximum number of items to read from each selected board.
+        - name: include_done
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Set true only when the user explicitly asks to include completed or done items.
       responses:
         "200":
           description: Todo items read successfully.
