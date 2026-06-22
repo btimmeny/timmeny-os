@@ -75,6 +75,36 @@ class TodoUpdateActionMetadataResponse(TodoActionMetadata):
     list: TodoList
 
 
+class TodoBulkActionMetadataUpdate(TodoUpdateActionMetadataRequest):
+    item_id: str = Field(..., min_length=1)
+
+    @field_validator("item_id")
+    @classmethod
+    def item_id_must_not_be_blank(cls, value: str) -> str:
+        stripped_value = value.strip()
+        if not stripped_value:
+            raise ValueError("item_id must not be blank")
+        return stripped_value
+
+
+class TodoBulkActionMetadataRequest(BaseModel):
+    updates: list[TodoBulkActionMetadataUpdate] = Field(..., min_length=1, max_length=100)
+
+
+class TodoBulkActionMetadataResult(TodoActionMetadata):
+    success: bool
+    item_id: str
+    list: TodoList
+    error: str | dict[str, Any] | None = None
+
+
+class TodoBulkActionMetadataResponse(BaseModel):
+    success: bool
+    updated_count: int
+    failed_count: int
+    results: list[TodoBulkActionMetadataResult]
+
+
 class TodoItem(TodoActionMetadata):
     item_id: str
     title: str
@@ -209,6 +239,79 @@ async def update_todo_action_metadata(
         action_group=payload.action_group,
         action_date=payload.action_date,
         action=payload.action,
+    )
+
+
+@app.post("/todos/bulk-action-metadata", response_model=TodoBulkActionMetadataResponse)
+async def bulk_update_todo_action_metadata(
+    payload: TodoBulkActionMetadataRequest,
+    x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+) -> TodoBulkActionMetadataResponse:
+    verify_api_key(x_api_key=x_api_key, authorization=authorization)
+
+    monday_token = get_monday_token()
+    columns_by_board_id: dict[str, dict[str, dict[str, Any]]] = {}
+    results: list[TodoBulkActionMetadataResult] = []
+
+    for update in payload.updates:
+        try:
+            target = get_todo_target(update.list)
+            board_id = target["board_id"]
+            if board_id not in columns_by_board_id:
+                columns_by_board_id[board_id] = await get_board_columns_by_title(
+                    token=monday_token,
+                    board_id=board_id,
+                )
+
+            column_values = build_action_column_values_from_columns(
+                columns_by_title=columns_by_board_id[board_id],
+                action_group=update.action_group,
+                action_date=update.action_date,
+                action=update.action,
+            )
+            if not column_values:
+                raise HTTPException(
+                    status_code=422,
+                    detail="At least one action metadata field is required.",
+                )
+
+            updated_item_id = await update_monday_item_columns(
+                token=monday_token,
+                board_id=board_id,
+                item_id=update.item_id,
+                column_values=column_values,
+            )
+            results.append(
+                TodoBulkActionMetadataResult(
+                    success=True,
+                    item_id=updated_item_id,
+                    list=update.list,
+                    action_group=update.action_group,
+                    action_date=update.action_date,
+                    action=update.action,
+                )
+            )
+        except HTTPException as exc:
+            results.append(
+                TodoBulkActionMetadataResult(
+                    success=False,
+                    item_id=update.item_id,
+                    list=update.list,
+                    action_group=update.action_group,
+                    action_date=update.action_date,
+                    action=update.action,
+                    error=exc.detail,
+                )
+            )
+
+    updated_count = sum(1 for result in results if result.success)
+    failed_count = len(results) - updated_count
+    return TodoBulkActionMetadataResponse(
+        success=failed_count == 0,
+        updated_count=updated_count,
+        failed_count=failed_count,
+        results=results,
     )
 
 
@@ -483,6 +586,20 @@ async def build_action_column_values(
         return {}
 
     columns_by_title = await get_board_columns_by_title(token=token, board_id=board_id)
+    return build_action_column_values_from_columns(
+        columns_by_title=columns_by_title,
+        action_group=action_group,
+        action_date=action_date,
+        action=action,
+    )
+
+
+def build_action_column_values_from_columns(
+    columns_by_title: dict[str, dict[str, Any]],
+    action_group: str | None,
+    action_date: date | None,
+    action: str | None,
+) -> dict[str, Any]:
     column_values: dict[str, Any] = {}
 
     if action_group is not None:

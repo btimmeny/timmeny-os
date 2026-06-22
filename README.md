@@ -104,6 +104,54 @@ Request:
 At least one of `action_group`, `action_date`, or `action` is required. The board must have columns named exactly `Action Group`, `Action Date`, and `Action` when those values are used.
 When `action` is `Decision`, the service also writes `Not Yet Started` to the `Status` column.
 
+### `POST /todos/bulk-action-metadata`
+
+Updates Monday.com action metadata columns for multiple existing todo items in one request. Use this for larger grouping passes.
+
+Request:
+
+```json
+{
+  "updates": [
+    {
+      "item_id": "...",
+      "list": "todo",
+      "action_group": "Launch"
+    },
+    {
+      "item_id": "...",
+      "list": "gs",
+      "action_group": "Partnerships",
+      "action_date": "2026-06-21",
+      "action": "Decision"
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "updated_count": 2,
+  "failed_count": 0,
+  "results": [
+    {
+      "success": true,
+      "item_id": "...",
+      "list": "todo",
+      "action_group": "Launch",
+      "action_date": null,
+      "action": null,
+      "error": null
+    }
+  ]
+}
+```
+
+If one update fails, the service keeps processing the rest and reports the per-item error in `results`.
+
 ## Configuration
 
 Set these environment variables:
@@ -176,6 +224,12 @@ Production decision todo test:
 
 ```bash
 curl -X POST https://timmeny-os-production.up.railway.app/todos -H "Content-Type: application/json" -H "Authorization: Bearer $TIMMENY_OS_API_KEY" -d '{"title":"Decide launch owner","list":"todo","action_group":"Launch","action_date":"2026-06-21","action":"Decision"}'
+```
+
+Production bulk grouping test:
+
+```bash
+curl -X POST https://timmeny-os-production.up.railway.app/todos/bulk-action-metadata -H "Content-Type: application/json" -H "Authorization: Bearer $TIMMENY_OS_API_KEY" -d '{"updates":[{"item_id":"ITEM_ID_1","list":"todo","action_group":"Launch"},{"item_id":"ITEM_ID_2","list":"gs","action_group":"Partnerships"}]}'
 ```
 
 ## Naming

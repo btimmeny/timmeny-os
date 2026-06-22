@@ -653,6 +653,224 @@ def test_update_todo_action_metadata_requires_known_column(monkeypatch):
     }
 
 
+def test_bulk_update_todo_action_metadata_updates_multiple_boards(monkeypatch):
+    requests = []
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, json, headers):
+            requests.append(json)
+            request = httpx.Request("POST", url)
+            if "GetBoardColumns" in json["query"]:
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "boards": [
+                                {
+                                    "columns": [
+                                        {
+                                            "id": "text_mkp",
+                                            "title": "Action Group",
+                                            "type": "text",
+                                        },
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    request=request,
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "change_multiple_column_values": {
+                            "id": json["variables"]["item_id"]
+                        }
+                    }
+                },
+                request=request,
+            )
+
+    monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")
+    monkeypatch.delenv("TIMMENY_OS_API_KEY", raising=False)
+    monkeypatch.setenv("TODO_BOARD_ID", "todo-board")
+    monkeypatch.setenv("GS_TODO_BOARD_ID", "gs-board")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = client.post(
+        "/todos/bulk-action-metadata",
+        json={
+            "updates": [
+                {
+                    "item_id": "todo-1",
+                    "list": "todo",
+                    "action_group": "Launch",
+                },
+                {
+                    "item_id": "gs-1",
+                    "list": "gs",
+                    "action_group": "Partnerships",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "updated_count": 2,
+        "failed_count": 0,
+        "results": [
+            {
+                "success": True,
+                "item_id": "todo-1",
+                "list": "todo",
+                "action_group": "Launch",
+                "action_date": None,
+                "action": None,
+                "error": None,
+            },
+            {
+                "success": True,
+                "item_id": "gs-1",
+                "list": "gs",
+                "action_group": "Partnerships",
+                "action_date": None,
+                "action": None,
+                "error": None,
+            },
+        ],
+    }
+    assert [request["variables"]["board_id"] for request in requests] == [
+        "todo-board",
+        "todo-board",
+        "gs-board",
+        "gs-board",
+    ]
+    assert json.loads(requests[1]["variables"]["column_values"]) == {
+        "text_mkp": "Launch",
+    }
+    assert json.loads(requests[3]["variables"]["column_values"]) == {
+        "text_mkp": "Partnerships",
+    }
+
+
+def test_bulk_update_todo_action_metadata_reports_partial_failures(monkeypatch):
+    requests = []
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, json, headers):
+            requests.append(json)
+            request = httpx.Request("POST", url)
+            if "GetBoardColumns" in json["query"]:
+                board_id = json["variables"]["board_id"]
+                columns_by_board = {
+                    "todo-board": [
+                        {
+                            "id": "text_mkp",
+                            "title": "Action Group",
+                            "type": "text",
+                        },
+                    ],
+                    "gs-board": [],
+                }
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "boards": [
+                                {
+                                    "columns": columns_by_board[board_id],
+                                }
+                            ]
+                        }
+                    },
+                    request=request,
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "change_multiple_column_values": {
+                            "id": json["variables"]["item_id"]
+                        }
+                    }
+                },
+                request=request,
+            )
+
+    monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")
+    monkeypatch.delenv("TIMMENY_OS_API_KEY", raising=False)
+    monkeypatch.setenv("TODO_BOARD_ID", "todo-board")
+    monkeypatch.setenv("GS_TODO_BOARD_ID", "gs-board")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = client.post(
+        "/todos/bulk-action-metadata",
+        json={
+            "updates": [
+                {
+                    "item_id": "todo-1",
+                    "list": "todo",
+                    "action_group": "Launch",
+                },
+                {
+                    "item_id": "gs-1",
+                    "list": "gs",
+                    "action_group": "Partnerships",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": False,
+        "updated_count": 1,
+        "failed_count": 1,
+        "results": [
+            {
+                "success": True,
+                "item_id": "todo-1",
+                "list": "todo",
+                "action_group": "Launch",
+                "action_date": None,
+                "action": None,
+                "error": None,
+            },
+            {
+                "success": False,
+                "item_id": "gs-1",
+                "list": "gs",
+                "action_group": "Partnerships",
+                "action_date": None,
+                "action": None,
+                "error": 'Monday.com board is missing the "Action Group" column.',
+            },
+        ],
+    }
+    assert len(requests) == 3
+
+
 def test_list_todos_returns_items_from_both_boards(monkeypatch):
     requests = []
 
