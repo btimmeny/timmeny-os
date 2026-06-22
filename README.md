@@ -24,9 +24,12 @@ Request:
 
 ```json
 {
-  "title": "TEST - Railway"
+  "title": "TEST - Railway",
+  "list": "todo"
 }
 ```
+
+`list` is optional and defaults to `todo`. Use `gs` to create the item in the GS todo target.
 
 Response:
 
@@ -34,7 +37,8 @@ Response:
 {
   "success": true,
   "item_id": "...",
-  "title": "TEST - Railway"
+  "title": "TEST - Railway",
+  "list": "todo"
 }
 ```
 
@@ -43,7 +47,10 @@ Response:
 Set these environment variables:
 
 - `MONDAY_API_TOKEN`: Monday.com API token.
-- `TODO_BOARD_ID`: Monday.com board id where todos should be created.
+- `TODO_BOARD_ID`: Monday.com board id for `To Do List`.
+- `TODO_GROUP_ID`: optional Monday.com group id for regular todos.
+- `GS_TODO_BOARD_ID`: Monday.com board id for `GS | Initiatives & Action Items`.
+- `GS_TODO_GROUP_ID`: optional Monday.com group id for GS todos.
 
 Use `.env.example` as the local template.
 
@@ -87,6 +94,12 @@ Production todo test:
 
 ```bash
 curl -X POST https://timmeny-os-production.up.railway.app/todos -H "Content-Type: application/json" -d '{"title":"TEST - Railway Deploy"}'
+```
+
+Production GS todo test:
+
+```bash
+curl -X POST https://timmeny-os-production.up.railway.app/todos -H "Content-Type: application/json" -d '{"title":"TEST - GS Railway Deploy","list":"gs"}'
 ```
 
 ## Intent

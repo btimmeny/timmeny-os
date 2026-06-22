@@ -71,20 +71,22 @@ def test_create_todo_creates_monday_item(monkeypatch):
         "success": True,
         "item_id": "12331184429",
         "title": "TEST - Railway Deploy",
+        "list": "todo",
     }
     assert requests == [
         {
             "url": main.MONDAY_API_URL,
             "json": {
                 "query": """
-    mutation CreateTodo($board_id: ID!, $item_name: String!) {
-      create_item(board_id: $board_id, item_name: $item_name) {
+    mutation CreateTodo($board_id: ID!, $group_id: String, $item_name: String!) {
+      create_item(board_id: $board_id, group_id: $group_id, item_name: $item_name) {
         id
       }
     }
     """,
                 "variables": {
                     "board_id": "8962223984",
+                    "group_id": None,
                     "item_name": "TEST - Railway Deploy",
                 },
             },
@@ -127,4 +129,65 @@ def test_create_todo_handles_monday_graphql_errors(monkeypatch):
             "message": "Monday.com GraphQL mutation failed.",
             "errors": [{"message": "Board not found"}],
         }
+    }
+
+
+def test_create_todo_can_target_gs_list(monkeypatch):
+    requests = []
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, json, headers):
+            requests.append(json)
+            request = httpx.Request("POST", url)
+            return httpx.Response(
+                200,
+                json={"data": {"create_item": {"id": "12331184430"}}},
+                request=request,
+            )
+
+    monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")
+    monkeypatch.setenv("GS_TODO_BOARD_ID", "111222333")
+    monkeypatch.setenv("GS_TODO_GROUP_ID", "topics")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = client.post(
+        "/todos",
+        json={"title": "GS follow-up", "list": "gs"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "item_id": "12331184430",
+        "title": "GS follow-up",
+        "list": "gs",
+    }
+    assert requests[0]["variables"] == {
+        "board_id": "111222333",
+        "group_id": "topics",
+        "item_name": "GS follow-up",
+    }
+
+
+def test_create_todo_requires_gs_board_id(monkeypatch):
+    monkeypatch.setenv("MONDAY_API_TOKEN", "test-token")
+    monkeypatch.delenv("GS_TODO_BOARD_ID", raising=False)
+
+    response = client.post(
+        "/todos",
+        json={"title": "GS follow-up", "list": "gs"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "GS_TODO_BOARD_ID environment variable is not configured."
     }
